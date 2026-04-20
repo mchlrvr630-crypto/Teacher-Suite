@@ -3,62 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GamAI v11.0 | Creative Worksheet Suite</title>
+    <title>GamAI v12.0 | Assessment Suite</title>
     <script src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
-        :root { --primary: #004a99; --accent: #fdb813; --bg: #f0f2f5; --success: #28a745; }
+        :root { --primary: #004a99; --accent: #fdb813; --bg: #f0f2f5; --success: #28a745; --danger: #dc3545; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); padding: 20px; }
         .container { max-width: 1000px; margin: auto; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-top: 10px solid var(--primary); overflow: hidden; }
-        .header { padding: 30px; text-align: center; background: #fff; }
+        .header { padding: 30px; text-align: center; background: #fff; border-bottom: 1px solid #eee; }
         .content { padding: 30px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .input-box { display: flex; flex-direction: column; }
         label { font-weight: 600; margin-bottom: 5px; font-size: 0.85rem; color: #555; }
         input, select, textarea { padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; }
-        .full { grid-column: span 2; }
+        .full { grid-column: 1 / -1; }
         button { width: 100%; padding: 18px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:hover { background: #003366; transform: translateY(-1px); }
+        button:hover { background: #003366; }
         .download-btn { background: var(--success); margin-top: 15px; display: none; }
         #output-area { margin-top: 30px; padding: 25px; background: #fafafa; border: 1px dashed #ccc; border-radius: 10px; display: none; }
         .loading { text-align: center; display: none; padding: 20px; color: var(--primary); font-weight: bold; }
         .hidden { display: none; }
+        .placeholder-tag { color: var(--danger); font-weight: bold; background: #ffebeb; padding: 2px 5px; border-radius: 4px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header">
-        <h1>GamAI Worksheet Creator</h1>
-        <p>Creative Activity & Remediation Planning</p>
+        <h1>GamAI Teacher's Suite</h1>
+        <p>Custom Assessment & Activity Architect (v12.0)</p>
     </div>
 
     <div class="content">
         <div class="grid">
             <div class="input-box"><label>Subject</label><input type="text" id="subject" placeholder="e.g. Science"></div>
-            <div class="input-box"><label>Grade Level</label><input type="text" id="grade" placeholder="e.g. Grade 7"></div>
+            <div class="input-box"><label>Grade Level</label><input type="text" id="grade" placeholder="e.g. 10"></div>
+            
             <div class="input-box">
-                <label>Type</label>
-                <select id="wsType" onchange="toggleRemedial()">
-                    <option value="Regular">Regular Activity</option>
-                    <option value="Remedial">Remedial Activity</option>
+                <label>Mode</label>
+                <select id="mode">
+                    <option value="Activity">Activity Worksheet</option>
+                    <option value="Test">Test/Quiz Worksheet</option>
                 </select>
             </div>
-            <div class="input-box"><label>Total Students</label><input type="number" id="totalStudents"></div>
-            <div id="remedialBox" class="input-box hidden"><label>Students needing Remedial (<80%)</label><input type="number" id="failCount"></div>
+
+            <div class="input-box">
+                <label>Difficulty/Type</label>
+                <select id="wsType" onchange="toggleRemedial()">
+                    <option value="Regular">Regular</option>
+                    <option value="Remedial">Remedial</option>
+                </select>
+            </div>
+
+            <div class="input-box"><label>Number of Items</label><input type="number" id="itemCount" value="10"></div>
+            <div class="input-box"><label>Total Students</label><input type="number" id="totalStudents" value="40"></div>
+            
+            <div id="remedialBox" class="input-box hidden"><label>Students needing Remedial</label><input type="number" id="failCount"></div>
         </div>
+
         <div class="input-box full" style="margin-bottom:20px;">
             <label>Learning Competencies (MELCs)</label>
-            <textarea id="melcs" rows="3" placeholder="Paste objectives here..."></textarea>
+            <textarea id="melcs" rows="3" placeholder="Paste the competencies or lesson objectives here..."></textarea>
         </div>
         
-        <button onclick="generateWorksheet()">✨ Create Creative Worksheet</button>
+        <button onclick="generateWorksheet()">⚡ Generate & Architect Worksheet</button>
         
-        <div id="loading" class="loading">🎨 Designing Graphics & Tables...</div>
+        <div id="loading" class="loading">📝 Compiling Assessment Items...</div>
 
         <div id="output-area">
             <div id="ai-response"></div>
-            <button id="downloadBtn" class="download-btn" onclick="exportToWord()">📥 Download Word Doc (.docx)</button>
+            <button id="downloadBtn" class="download-btn" onclick="exportToWord()">📥 Download Word Document (.docx)</button>
         </div>
     </div>
 </div>
@@ -82,22 +96,27 @@
         document.getElementById('loading').style.display = "block";
         document.getElementById('output-area').style.display = "none";
 
+        const mode = document.getElementById('mode').value;
         const type = document.getElementById('wsType').value;
+        const count = document.getElementById('itemCount').value;
         const failCount = document.getElementById('failCount').value;
         
-        const promptText = `Act as a Creative Instructional Designer. Create a ${type} Worksheet for Grade ${document.getElementById('grade').value} ${document.getElementById('subject').value}.
-        Competency: ${document.getElementById('melcs').value}.
-        ${type === "Remedial" ? "Focus on scaffolding for " + failCount + " students who struggled." : ""}
+        const promptText = `Act as an expert Academic Teacher and Curriculum Designer. 
+        Create a ${type} ${mode} for Grade ${document.getElementById('grade').value} ${document.getElementById('subject').value}.
+        Learning Competency: ${document.getElementById('melcs').value}.
+        Item Count: ${count} items.
+        ${type === "Remedial" ? "This is a REMEDIAL version for " + failCount + " students. Use simplified language, extra scaffolding, and clear examples." : ""}
         
-        REQUIRED ELEMENTS:
-        1. Visual Header (Text-based graphic description).
-        2. "Concept Map" section (Use a text-based table structure).
-        3. A "Matching Type" or "Data Table" activity using a Markdown Table.
-        4. Creative illustrations descriptions (e.g. [Insert Image of...]).
-        5. Analysis Questions.
-        6. Answer Key at the bottom.
-        
-        BE CREATIVE AND ENGAGING. Use fun headings.`;
+        CONTENT STRUCTURE:
+        1. Professional Header: Include School Name Placeholder, Name, Date, Grade & Section.
+        2. Objectives: Derived from the MELCs.
+        3. ${mode === 'Activity' ? 'Concept Brief: A short, engaging explanation of the topic.' : 'General Directions: Clear instructions for the test.'}
+        4. The Assessment: Generate exactly ${count} items. Use a mix of formats (Multiple Choice, Matching Type, or Short Answer). 
+        5. Visual Cues: Include at least 2 placeholders like [INSERT: Image description] to aid visual learners.
+        6. Tables: Use a Markdown table for at least one section (e.g., matching or data analysis).
+        7. Answer Key: Provided at the end.
+
+        Style: Creative, encouraging (if Activity) or formal and clear (if Test).`;
 
         try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${apiKey}`;
@@ -112,7 +131,8 @@
             document.getElementById('ai-response').innerHTML = rawAIContent
                 .replace(/\n/g, "<br>")
                 .replace(/\|/g, " | ")
-                .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+                .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                .replace(/\[INSERT:(.*?)\]/g, '<span class="placeholder-tag">[VISUAL: $1]</span>');
             
             document.getElementById('output-area').style.display = "block";
             document.getElementById('downloadBtn').style.display = "block";
@@ -124,35 +144,45 @@
     }
 
     function exportToWord() {
-        const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } = docx;
-        
+        const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType } = docx;
         const lines = rawAIContent.split('\n');
         const docSections = [];
 
         lines.forEach(line => {
-            // Simple logic to detect "Table" lines from AI and convert to Word Tables
             if (line.includes('|')) {
                 const cells = line.split('|').filter(c => c.trim() !== "");
                 if (cells.length > 1) {
                     docSections.push(new Table({
                         width: { size: 100, type: WidthType.PERCENTAGE },
                         rows: [new TableRow({
-                            children: cells.map(c => new TableCell({ children: [new Paragraph(c.trim())] }))
+                            children: cells.map(c => new TableCell({
+                                children: [new Paragraph({ children: [new TextRun({ text: c.trim(), size: 22 })] })]
+                            }))
                         })]
                     }));
                 }
-            } else {
+            } else if (line.includes('[INSERT:')) {
+                const desc = line.match(/\[INSERT:(.*?)\]/)[1];
                 docSections.push(new Paragraph({
-                    spacing: { before: 200 },
-                    children: [new TextRun({ text: line.replace(/\*/g, ""), bold: line.includes('###') })]
+                    alignment: AlignmentType.CENTER,
+                    children: [new TextRun({ text: `\n[IMAGE BOX: ${desc.toUpperCase()}]\n`, color: "FF0000", bold: true, italics: true, size: 20 })]
+                }));
+            } else {
+                const isHeader = line.includes('###') || line.toUpperCase() === line && line.length > 5;
+                docSections.push(new Paragraph({
+                    spacing: { before: 150, after: 150 },
+                    children: [new TextRun({ 
+                        text: line.replace(/###/g, "").replace(/\*/g, "").trim(), 
+                        bold: isHeader || line.includes('**'),
+                        size: isHeader ? 28 : 22
+                    })]
                 }));
             }
         });
 
         const doc = new Document({ sections: [{ children: docSections }] });
-
         Packer.toBlob(doc).then(blob => {
-            saveAs(blob, `${document.getElementById('subject').value}_Worksheet.docx`);
+            saveAs(blob, `${document.getElementById('mode').value}_${document.getElementById('subject').value}.docx`);
         });
     }
 </script>
