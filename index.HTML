@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GamAI v10.0 | Research & Teaching Suite</title>
+    <script src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        :root { --primary: #004a99; --accent: #fdb813; --bg: #f0f2f5; --success: #28a745; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); padding: 20px; color: #333; }
+        .container { max-width: 1000px; margin: auto; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-top: 10px solid var(--primary); }
+        .nav-tabs { display: flex; background: #eee; border-radius: 12px 12px 0 0; }
+        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .tab.active { background: white; border-top: 4px solid var(--primary); color: var(--primary); }
+        .content { padding: 40px; }
+        .section-title { font-weight: bold; color: var(--primary); border-bottom: 2px solid var(--accent); display: inline-block; margin-bottom: 15px; text-transform: uppercase; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .input-box { display: flex; flex-direction: column; }
+        label { font-weight: 600; margin-bottom: 8px; font-size: 0.9rem; }
+        input, select, textarea { padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; }
+        .full { grid-column: span 2; }
+        .hidden { display: none; }
+        button { width: 100%; padding: 20px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 20px; }
+        .download-btn { background: var(--success); margin-top: 10px; display: none; }
+        #output-area { margin-top: 40px; padding: 35px; background: #fffdf2; border: 1px solid var(--accent); border-radius: 10px; display: none; line-height: 1.8; white-space: pre-wrap; }
+        .loading { text-align: center; display: none; padding: 20px; font-weight: bold; color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="nav-tabs">
+        <div id="tab1" class="tab active" onclick="switchTab('research')">Research Architect</div>
+        <div id="tab2" class="tab" onclick="switchTab('teacher')">Worksheet Generator</div>
+    </div>
+
+    <div class="content">
+        <div id="research-section">
+            <div class="section-title">I. Study Parameters</div>
+            <div class="grid">
+                <div class="input-box"><label>Independent Variable</label><input type="text" id="iv"></div>
+                <div class="input-box"><label>Dependent Variable</label><input type="text" id="dv"></div>
+                <div class="input-box"><label>IV Indicators</label><input type="text" id="ivSub"></div>
+                <div class="input-box"><label>DV Indicators</label><input type="text" id="dvSub"></div>
+            </div>
+            <button onclick="generateResearch()">Generate Research Framework</button>
+        </div>
+
+        <div id="teacher-section" class="hidden">
+            <div class="section-title">I. Class Details</div>
+            <div class="grid">
+                <div class="input-box"><label>Subject</label><input type="text" id="subject"></div>
+                <div class="input-box"><label>Grade Level</label><input type="text" id="grade"></div>
+                <div class="input-box"><label>Worksheet Type</label>
+                    <select id="wsType" onchange="toggleRemedial()">
+                        <option value="Regular">Regular Activity</option>
+                        <option value="Remedial">Remedial Activity</option>
+                    </select>
+                </div>
+                <div class="input-box"><label>Total Students</label><input type="number" id="totalStudents"></div>
+                <div id="remedialBox" class="input-box hidden"><label>Students needing Remedial (<80%)</label><input type="number" id="failCount"></div>
+            </div>
+            <div class="input-box full">
+                <label>Learning Competencies (MELCs)</label>
+                <textarea id="melcs" rows="3" placeholder="Paste the competencies here..."></textarea>
+            </div>
+            <button onclick="generateWorksheet()">Generate Worksheet</button>
+        </div>
+
+        <div id="loading" class="loading">🛰️ AI is processing your request...</div>
+        <div id="output-area">
+            <div id="ai-response"></div>
+            <button id="downloadBtn" class="download-btn" onclick="exportToWord()">Download as Word (.docx)</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let lastGeneratedContent = "";
+
+    function switchTab(mode) {
+        document.getElementById('research-section').classList.toggle('hidden', mode !== 'research');
+        document.getElementById('teacher-section').classList.toggle('hidden', mode !== 'teacher');
+        document.getElementById('tab1').classList.toggle('active', mode === 'research');
+        document.getElementById('tab2').classList.toggle('active', mode === 'teacher');
+    }
+
+    function toggleRemedial() {
+        const type = document.getElementById('wsType').value;
+        document.getElementById('remedialBox').classList.toggle('hidden', type !== 'Remedial');
+    }
+
+    async function callGemini(promptText) {
+        let apiKey = localStorage.getItem("gamai_key");
+        if (!apiKey) {
+            apiKey = prompt("Enter your Gemini API Key:");
+            if (apiKey) localStorage.setItem("gamai_key", apiKey);
+            else return null;
+        }
+
+        document.getElementById('loading').style.display = "block";
+        document.getElementById('output-area').style.display = "none";
+
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${apiKey}`;
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+            });
+            const data = await response.json();
+            return data.candidates[0].content.parts[0].text;
+        } catch (err) {
+            alert("Error: " + err.message);
+            return null;
+        } finally {
+            document.getElementById('loading').style.display = "none";
+        }
+    }
+
+    async function generateResearch() {
+        const prompt = `Research Architect: IV is ${document.getElementById('iv').value}, DV is ${document.getElementById('dv').value}. Generate Titles, Theory, Conceptual Framework, SOP (General/Specific), and Stats Mapping.`;
+        const result = await callGemini(prompt);
+        if (result) displayResult(result, false);
+    }
+
+    async function generateWorksheet() {
+        const type = document.getElementById('wsType').value;
+        const failInfo = type === "Remedial" ? `This is for ${document.getElementById('failCount').value} students who did not meet the 80% threshold.` : "";
+        
+        const prompt = `Act as an expert teacher. Create a ${type} Activity Worksheet for Grade ${document.getElementById('grade').value} ${document.getElementById('subject').value}. 
+        Competencies: ${document.getElementById('melcs').value}.
+        ${failInfo}
+        Include: 
+        1. Title and Objective.
+        2. Short Concept Note.
+        3. Activity (Different parts: Easy, Average, Challenging).
+        4. Performance Task or Assessment.
+        5. Answer Key.
+        Format it professionally.`;
+
+        const result = await callGemini(prompt);
+        if (result) displayResult(result, true);
+    }
+
+    function displayResult(text, showDownload) {
+        lastGeneratedContent = text;
+        document.getElementById('ai-response').innerHTML = text.replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+        document.getElementById('output-area').style.display = "block";
+        document.getElementById('downloadBtn').style.display = showDownload ? "block" : "none";
+    }
+
+    function exportToWord() {
+        const { Document, Packer, Paragraph, TextRun } = docx;
+        const lines = lastGeneratedContent.split('\n');
+        const children = lines.map(line => new Paragraph({
+            children: [new TextRun(line.replace(/\*/g, ""))]
+        }));
+
+        const doc = new Document({
+            sections: [{ properties: {}, children: children }]
+        });
+
+        Packer.toBlob(doc).then(blob => {
+            saveAs(blob, `Worksheet_${document.getElementById('subject').value}.docx`);
+        });
+    }
+</script>
+</body>
+</html>
